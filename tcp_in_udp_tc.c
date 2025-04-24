@@ -156,6 +156,8 @@ static __always_inline void udp_to_tcp(struct __sk_buff *skb,
 	struct tcphdr *tcphdr = nh->pos;
 	int nh_off = nh->pos - data;
 	__be16 proto_old, proto_new;
+	__be16 zero = 0;
+	__be32 csum;
 
 	if (parse_udphdr(nh, data_end, (struct udphdr**)&tuhdr) < 0 ||
 	    (void *)tuhdr + sizeof(struct tcphdr) > data_end)
@@ -183,12 +185,15 @@ static __always_inline void udp_to_tcp(struct __sk_buff *skb,
 	tcphdr->check = tuhdr_cpy.udphdr.check;
 	tcphdr->urg_ptr = 0;
 
+	/* TODO: csum is wrong... */
+	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be16),
+			     (void *)&proto_new, sizeof(__be16), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
-			    proto_old, proto_new,
-			    BPF_F_PSEUDO_HDR | sizeof(__be16));
+			    0, csum, BPF_F_PSEUDO_HDR);
+	csum = bpf_csum_diff((void *)&tuhdr_cpy.udphdr.len, sizeof(__be16),
+			     (void *)&zero, sizeof(__be16), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
-			    tuhdr_cpy.udphdr.len, 0,
-			    BPF_F_PSEUDO_HDR | sizeof(__be16));
+			    0, csum, BPF_F_PSEUDO_HDR);
 
 	if (iphdr) {
 		bpf_l3_csum_replace(skb, ((void*)iphdr - data) +
@@ -240,7 +245,8 @@ static __always_inline void tcp_to_udp(struct __sk_buff *skb,
 	struct tcphdr *tcphdr, tcphdr_cpy;
 	int nh_off = nh->pos - data;
 	__be16 proto_old, proto_new;
-	__be16 udp_len;
+	__be16 udp_len, zero = 0;
+	__be32 csum;
 
 	if (parse_tcphdr(nh, data_end, &tcphdr) < 0)
 		goto out;
@@ -282,15 +288,20 @@ static __always_inline void tcp_to_udp(struct __sk_buff *skb,
 	__builtin_memcpy(&tcphdr_cpy, tcphdr, sizeof(struct tcphdr));
 	tuhdr->udphdr.len = udp_len;
 	tuhdr->udphdr.check = tcphdr_cpy.check;
-	__builtin_memcpy(&tuhdr->doff_flags_window, &tcphdr_cpy + 12, sizeof(__be32));
+	__builtin_memcpy(&tuhdr->doff_flags_window,
+			 (void *)&tcphdr_cpy + sizeof(__be32) * 3, sizeof(__be32));
 	tuhdr->seq = tcphdr_cpy.seq;
 	tuhdr->ack_seq = tcphdr_cpy.ack_seq;
 
+	/* TODO: csum is wrong... */
+	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be16),
+			     (void *)&proto_new, sizeof(__be16), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
-			    proto_old, proto_new,
-			    BPF_F_PSEUDO_HDR | sizeof(__be16));
+			    0, csum, BPF_F_PSEUDO_HDR);
+	csum = bpf_csum_diff((void *)&zero, sizeof(__be16),
+			     (void *)&udp_len, sizeof(__be16), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
-			    0, udp_len, BPF_F_PSEUDO_HDR | sizeof(__be16));
+			    0, csum, BPF_F_PSEUDO_HDR);
 
 	if (iphdr) {
 		bpf_l3_csum_replace(skb, ((void*)iphdr - data) +
