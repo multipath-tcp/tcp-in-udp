@@ -147,11 +147,12 @@ static __always_inline int parse_udphdr(struct hdr_cursor *nh,
  ** Ingress **
  *************/
 
-static __always_inline void udp_to_tcp(struct __sk_buff *skb,
-				       struct hdr_cursor *nh, void *data,
-				       void *data_end, struct iphdr *iphdr,
-				       struct ipv6hdr *ipv6hdr)
+static __always_inline void
+udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
+	   struct iphdr *iphdr, struct ipv6hdr *ipv6hdr)
 {
+	void *data_end = (void *)(long)skb->data_end;
+	void *data = (void *)(long)skb->data;
 	struct tcp_in_udp_hdr *tuhdr, tuhdr_cpy;
 	struct tcphdr *tcphdr = nh->pos;
 	int nh_off = nh->pos - data;
@@ -186,10 +187,13 @@ static __always_inline void udp_to_tcp(struct __sk_buff *skb,
 	tcphdr->urg_ptr = 0;
 
 	/* TODO: csum is wrong... */
+	/* proto has changed */
 	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be16),
 			     (void *)&proto_new, sizeof(__be16), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
 			    0, csum, BPF_F_PSEUDO_HDR);
+
+	/* UDP Length vs Urgent Pointer */
 	csum = bpf_csum_diff((void *)&tuhdr_cpy.udphdr.len, sizeof(__be16),
 			     (void *)&zero, sizeof(__be16), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
@@ -225,7 +229,7 @@ int tcp_ingress_drop(struct __sk_buff *skb)
 	}
 
 	if (ip_type == IPPROTO_UDP)
-		udp_to_tcp(skb, &nh, data, data_end, iphdr, ipv6hdr);
+		udp_to_tcp(skb, &nh, iphdr, ipv6hdr);
 
 out:
 	return ret;
@@ -236,11 +240,12 @@ out:
  ** Egress **
  ************/
 
-static __always_inline void tcp_to_udp(struct __sk_buff *skb,
-				       struct hdr_cursor *nh, void *data,
-				       void *data_end, struct iphdr *iphdr,
-				       struct ipv6hdr *ipv6hdr)
+static __always_inline void
+tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
+	   struct iphdr *iphdr, struct ipv6hdr *ipv6hdr)
 {
+	void *data_end = (void *)(long)skb->data_end;
+	void *data = (void *)(long)skb->data;
 	struct tcp_in_udp_hdr *tuhdr = nh->pos;
 	struct tcphdr *tcphdr, tcphdr_cpy;
 	int nh_off = nh->pos - data;
@@ -294,14 +299,17 @@ static __always_inline void tcp_to_udp(struct __sk_buff *skb,
 	tuhdr->ack_seq = tcphdr_cpy.ack_seq;
 
 	/* TODO: csum is wrong... */
+	/* proto has changed */
 	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be16),
 			     (void *)&proto_new, sizeof(__be16), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
 			    0, csum, BPF_F_PSEUDO_HDR);
+
+	/* UDP Length vs Urgent Pointer */
 	csum = bpf_csum_diff((void *)&zero, sizeof(__be16),
 			     (void *)&udp_len, sizeof(__be16), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
-			    0, csum, BPF_F_PSEUDO_HDR);
+			    0, csum, 0);
 
 	if (iphdr) {
 		bpf_l3_csum_replace(skb, ((void*)iphdr - data) +
@@ -333,7 +341,7 @@ int tcp_egress_ack(struct __sk_buff *skb)
 	}
 
 	if (ip_type == IPPROTO_TCP)
-		tcp_to_udp(skb, &nh, data, data_end, iphdr, ipv6hdr);
+		tcp_to_udp(skb, &nh, iphdr, ipv6hdr);
 
 out:
 	return ret;

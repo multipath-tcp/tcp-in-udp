@@ -20,6 +20,8 @@ cleanup()
 	local suffix
 	for suffix in "${HOSTS[@]}"; do
 		local ns="${NS}_${suffix}"
+		echo "== ${suffix} =="
+		ip netns exec "${ns}" nstat
 		ip netns pids "${ns}" | xargs -r kill
 		ip netns del "${ns}" >/dev/null 2>&1
 	done
@@ -37,7 +39,8 @@ tc_client()
 {
 	local ns="${NS}_cpe" iface="int"
 
-	ip netns exec "${ns}" mount -t debugfs none /sys/kernel/debug
+	# ip netns will umount everything on exit
+	ip netns exec "${ns}" sh -c "mount -t debugfs none /sys/kernel/debug && cat /sys/kernel/debug/tracing/trace_pipe" &
 
 	tc -n "${ns}" qdisc add dev "${iface}" clsact
 	tc -n "${ns}" filter add dev "${iface}" egress  bpf da obj tcp_in_udp_tc.o sec tc_egress
@@ -51,7 +54,8 @@ tc_server()
 {
 	local ns="${NS}_net" iface="int"
 
-	ip netns exec "${ns}" mount -t debugfs none /sys/kernel/debug
+	# ip netns will umount everything on exit
+	ip netns exec "${ns}" sh -c "mount -t debugfs none /sys/kernel/debug && cat /sys/kernel/debug/tracing/trace_pipe" &
 
 	tc -n "${ns}" qdisc add dev "${iface}" clsact
 	tc -n "${ns}" filter add dev "${iface}" egress  bpf da obj tcp_in_udp_tc.o sec tc_egress
@@ -126,6 +130,6 @@ case "${1}" in
 	*)
 		export -f tc_client tc_server
 		echo -e "\n\tNetns: $(netns)\n\tUse 'ip netns exec <NETNS> <CMD>' to execute a command in the netns.\n\tServer: iperf3 -c 10.0.2.2 -R\n"
-		ip netns exec ${NS}_cli bash
+		PS1="client# " ip netns exec ${NS}_cli sh -c "mount -t debugfs none /sys/kernel/debug && bash"
 		;;
 esac
