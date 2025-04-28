@@ -48,6 +48,9 @@ tc_client()
 
 	tc -n "${ns}" filter show dev "${iface}" egress
 	tc -n "${ns}" filter show dev "${iface}" ingress
+
+	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off sg off
+	ip netns exec "${NS}_cli" ethtool -K "cpe" tso off ## because of virtio-net still creating large packets
 }
 
 tc_server()
@@ -63,6 +66,9 @@ tc_server()
 
 	tc -n "${ns}" filter show dev "${iface}" egress
 	tc -n "${ns}" filter show dev "${iface}" ingress
+
+	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off sg off
+	ip netns exec "${NS}_srv" ethtool -K "net" tso off ## because of virtio-net still creating large packets
 }
 
 capture()
@@ -122,7 +128,7 @@ setup()
 
 setup
 server
-capture
+# capture
 
 tc_client
 tc_server
