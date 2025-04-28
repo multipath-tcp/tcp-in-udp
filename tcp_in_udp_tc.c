@@ -160,9 +160,20 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	__be16 zero = 0;
 	__be32 csum;
 
-	if (parse_udphdr(nh, data_end, (struct udphdr**)&tuhdr) < 0 ||
-	    (void *)tuhdr + sizeof(struct tcphdr) > data_end)
+	if (parse_udphdr(nh, data_end, (struct udphdr**)&tuhdr) < 0)
 		goto out;
+
+	if ((void *)tuhdr + sizeof(struct tcphdr) > data_end) {
+		bpf_printk("udp-tcp: TODO: data_end too small: ulen:%u\n",
+			   bpf_ntohs(tuhdr->udphdr.len));
+		goto out;
+	}
+
+	if (skb->gso_segs > 1) {
+		bpf_printk("udp-tcp: WARNING, GRO/LRO should be disabled: length:%u, segs:%u, size:%u\n",
+			   skb->len, skb->gso_segs, skb->gso_size);
+		goto out;
+	}
 
 	/* Change protocol: UDP -> TCP */
 	if (iphdr)
@@ -257,18 +268,24 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 
 	if (tcphdr->urg) {
 		if (iphdr)
-			bpf_printk("Skip: %pI4:%u -> %pI4:%u: urgent\n",
+			bpf_printk("tcp-udp: Skip: %pI4:%u -> %pI4:%u: urgent\n",
 				   bpf_ntohl(iphdr->saddr),
 				   bpf_ntohs(tcphdr->source),
 				   bpf_ntohl(iphdr->daddr),
 				   bpf_ntohs(tcphdr->dest));
 		else if (ipv6hdr)
-			bpf_printk("Skip: %pI6c:%u -> %pI6c:%u: urgent\n",
+			bpf_printk("tcp-udp: Skip: %pI6c:%u -> %pI6c:%u: urgent\n",
 				   &ipv6hdr->saddr,
 				   bpf_ntohs(tcphdr->source),
 				   &ipv6hdr->daddr,
 				   bpf_ntohs(tcphdr->dest));
 		goto out; /* TODO: or set to 0 and adapt checksum? */
+	}
+
+	if (skb->gso_segs > 1) {
+		bpf_printk("tcp-udp: WARNING, GSO/TSO should be disabled: length:%u, segs:%u, size:%u\n",
+			   skb->len, skb->gso_segs, skb->gso_size);
+		goto out;
 	}
 
 	/* Change protocol: TCP -> UDP */

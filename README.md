@@ -113,6 +113,12 @@ tc filter add dev "${IFACE}" egress bpf da obj tcp_in_udp_tc.o sec tc_egress
 tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_ingress
 ```
 
+GRO/TSO cannot be used on this interface, because each UDP packet will carry a
+part of the TCP headers, not part of the data that can be merged:
+
+```
+ethtool -K "${IFACE}" gro off lro off gso off tso off sg off
+```
 
 ## Identification
 
