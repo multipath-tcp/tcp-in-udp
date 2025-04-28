@@ -186,7 +186,6 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	tcphdr->check = tuhdr_cpy.udphdr.check;
 	tcphdr->urg_ptr = 0;
 
-	/* TODO: csum is wrong... */
 	/* proto has changed */
 	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be16),
 			     (void *)&proto_new, sizeof(__be16), 0);
@@ -197,7 +196,7 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	csum = bpf_csum_diff((void *)&tuhdr_cpy.udphdr.len, sizeof(__be16),
 			     (void *)&zero, sizeof(__be16), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
-			    0, csum, BPF_F_PSEUDO_HDR);
+			    0, csum, 0);
 
 	if (iphdr) {
 		bpf_l3_csum_replace(skb, ((void*)iphdr - data) +
@@ -298,7 +297,6 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	tuhdr->seq = tcphdr_cpy.seq;
 	tuhdr->ack_seq = tcphdr_cpy.ack_seq;
 
-	/* TODO: csum is wrong... */
 	/* proto has changed */
 	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be16),
 			     (void *)&proto_new, sizeof(__be16), 0);

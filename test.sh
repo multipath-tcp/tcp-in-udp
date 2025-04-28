@@ -67,10 +67,10 @@ tc_server()
 
 capture()
 {
-	ip netns exec "${NS}_cli" tcpdump -i cpe -w cli_cpe.pcap tcp or udp &
-	ip netns exec "${NS}_int" tcpdump -i cpe -w int_cpe.pcap tcp or udp &
-	ip netns exec "${NS}_int" tcpdump -i net -w int_net.pcap tcp or udp &
-	ip netns exec "${NS}_srv" tcpdump -i net -w srv_net.pcap tcp or udp &
+	ip netns exec "${NS}_cli" tcpdump -i cpe -s 100 -w cli_cpe.pcap tcp or udp &
+	ip netns exec "${NS}_int" tcpdump -i cpe -s 100 -w int_cpe.pcap tcp or udp &
+	ip netns exec "${NS}_int" tcpdump -i net -s 100 -w int_net.pcap tcp or udp &
+	ip netns exec "${NS}_srv" tcpdump -i net -s 100 -w srv_net.pcap tcp or udp &
 }
 
 setup()
@@ -106,7 +106,8 @@ setup()
 	ip -n "${NS}_int" link set "net" up
 	ip -n "${NS}_int" addr add dev "net" 10.0.3.2/24
 	tc -n "${NS}_int" qdisc add dev "net" root netem rate 10mbit delay 5ms
-	ip -n "${NS}_int" route add default via 10.0.3.1 dev "net"
+	ip -n "${NS}_int" route add 10.0.0.0/24 via 10.0.1.2 dev "cpe"
+	ip -n "${NS}_int" route add 10.0.2.0/24 via 10.0.3.1 dev "net"
 
 	ip -n "${NS}_net" link set "int" up
 	ip -n "${NS}_net" addr add dev "int" 10.0.3.1/24

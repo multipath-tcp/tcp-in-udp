@@ -1,8 +1,8 @@
 # TCP in UDP
 
-Middleboxes can mess-up with TCP flows, e.g. intercepting the connections and
+Middleboxes can mess up with TCP flows, e.g. intercepting the connections and
 dropping MPTCP options. Using an TCP-in-UDP tunnel will force such middleboxes
-not to modify such TCP connections. The idea here is inspirected by an old [IETF
+not to modify such TCP connections. The idea here is inspired by an old [IETF
 draft](https://datatracker.ietf.org/doc/html/draft-cheshire-tcp-over-udp-00.html).
 
 This "tunnel" is done in BPF, from the TC hooks.
