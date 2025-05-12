@@ -100,7 +100,11 @@ Checksum:
 
 ## Build
 
-Build the binary using `make`. CLang is required.
+Build the binary using `make`. CLang and `libbpf` is required, e.g.
+
+```
+sudo apt install clang llvm libelf-dev build-essential libc6-dev-i386 libbpf-dev
+```
 
 
 ## Setup
