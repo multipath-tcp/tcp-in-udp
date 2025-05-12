@@ -121,7 +121,7 @@ GRO/TSO cannot be used on this interface, because each UDP packet will carry a
 part of the TCP headers, not part of the data that can be merged:
 
 ```
-ethtool -K "${IFACE}" gro off lro off gso off tso off sg off
+ethtool -K "${IFACE}" gro off lro off gso off tso off ufo off sg off
 ```
 
 ## Identification

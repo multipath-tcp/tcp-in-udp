@@ -35,8 +35,8 @@ tc_setup()
 	tc -n "${ns}" filter show dev "${iface}" egress
 	tc -n "${ns}" filter show dev "${iface}" ingress
 
-	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off sg off
-	ethtool -K "eth0" gro off gso off tso off lro off sg off
+	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off ufo off sg off
+	ethtool -K "eth0" gro off gso off tso off lro off ufo off sg off
 }
 
 capture()
