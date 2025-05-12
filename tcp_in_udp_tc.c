@@ -26,6 +26,8 @@ struct hdr_cursor {
 	void *pos;
 };
 
+__u16 PORT = 5201;
+
 /*******************************************
  ** parse_*hdr helpers from XDP tutorials **
  *******************************************/
@@ -175,6 +177,10 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 		goto out;
 	}
 
+	if (tuhdr->udphdr.source != bpf_htons(PORT) &&
+	    tuhdr->udphdr.dest != bpf_htons(PORT))
+		goto out;
+
 	/* Change protocol: UDP -> TCP */
 	if (iphdr)
 		iphdr->protocol = IPPROTO_TCP;
@@ -264,6 +270,10 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	__be32 csum;
 
 	if (parse_tcphdr(nh, data_end, &tcphdr) < 0)
+		goto out;
+
+	if (tcphdr->source != bpf_htons(PORT) &&
+	    tcphdr->dest != bpf_htons(PORT))
 		goto out;
 
 	if (tcphdr->urg) {
