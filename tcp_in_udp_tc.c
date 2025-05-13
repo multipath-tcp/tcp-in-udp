@@ -158,9 +158,7 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	struct tcp_in_udp_hdr *tuhdr, tuhdr_cpy;
 	struct tcphdr *tcphdr = nh->pos;
 	int nh_off = nh->pos - data;
-	__be16 proto_old, proto_new;
 	__be16 zero = 0;
-	__be32 csum;
 
 	if (parse_udphdr(nh, data_end, (struct udphdr**)&tuhdr) < 0)
 		goto out;
@@ -181,17 +179,6 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 		goto out;
 	}
 
-	/* Change protocol: UDP -> TCP */
-	if (iphdr)
-		iphdr->protocol = IPPROTO_TCP;
-	else if (ipv6hdr)
-		ipv6hdr->nexthdr = IPPROTO_TCP;
-	else
-		goto out;
-
-	proto_old = bpf_htons(IPPROTO_UDP);
-	proto_new = bpf_htons(IPPROTO_TCP);
-
 	/* Do the modification before calling bpf_...(skb) helpers which can
 	 * modify the SKB and cause "invalid mem access 'scalar'" errors.
 	 */
@@ -203,23 +190,34 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	tcphdr->check = tuhdr_cpy.udphdr.check;
 	tcphdr->urg_ptr = 0;
 
-	/* proto has changed */
-	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be16),
-			     (void *)&proto_new, sizeof(__be16), 0);
-	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
-			    0, csum, BPF_F_PSEUDO_HDR);
-
-	/* UDP Length vs Urgent Pointer */
-	csum = bpf_csum_diff((void *)&tuhdr_cpy.udphdr.len, sizeof(__be16),
-			     (void *)&zero, sizeof(__be16), 0);
-	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
-			    0, csum, 0);
-
+	/* Change protocol: UDP -> TCP */
 	if (iphdr) {
+		__be16 proto_old = bpf_htons(IPPROTO_UDP);
+		__be16 proto_new = bpf_htons(IPPROTO_TCP);
+
+		iphdr->protocol = IPPROTO_TCP;
+
 		bpf_l3_csum_replace(skb, ((void*)iphdr - data) +
 					  offsetof(struct iphdr, check),
-					  proto_old, proto_new, sizeof(__be16));
+				    proto_old, proto_new, sizeof(__be16));
+		bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
+				    proto_old, proto_new,
+				    BPF_F_PSEUDO_HDR | sizeof(__be16));
+	} else if (ipv6hdr) {
+		__be32 proto_old = bpf_htonl(IPPROTO_UDP);
+		__be32 proto_new = bpf_htonl(IPPROTO_TCP);
+
+		ipv6hdr->nexthdr = IPPROTO_TCP;
+
+		bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
+				    proto_old, proto_new,
+				    BPF_F_PSEUDO_HDR | sizeof(__be32));
 	}
+
+	/* UDP Length vs Urgent Pointer */
+	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
+			    tuhdr_cpy.udphdr.len, zero,
+			    BPF_F_PSEUDO_HDR | sizeof(__be16));
 out:
 	return;
 }
@@ -265,9 +263,7 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	struct tcp_in_udp_hdr *tuhdr = nh->pos;
 	struct tcphdr *tcphdr, tcphdr_cpy;
 	int nh_off = nh->pos - data;
-	__be16 proto_old, proto_new;
 	__be16 udp_len, zero = 0;
-	__be32 csum;
 
 	if (parse_tcphdr(nh, data_end, &tcphdr) < 0)
 		goto out;
@@ -298,20 +294,14 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 		goto out;
 	}
 
-	/* Change protocol: TCP -> UDP */
 	if (iphdr) {
-		iphdr->protocol = IPPROTO_UDP;
 		udp_len = bpf_htons(bpf_ntohs(iphdr->tot_len) -
 				    ((void*)tcphdr - (void*)iphdr));
 	} else if (ipv6hdr) {
-		ipv6hdr->nexthdr = IPPROTO_UDP;
 		udp_len = ipv6hdr->payload_len;
 	} else {
 		goto out;
 	}
-
-	proto_old = bpf_htons(IPPROTO_TCP);
-	proto_new = bpf_htons(IPPROTO_UDP);
 
 	/* Do the modification before calling bpf_...(skb) helpers which can
 	 * modify the SKB and cause "invalid mem access 'scalar'" errors.
@@ -324,23 +314,34 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	tuhdr->seq = tcphdr_cpy.seq;
 	tuhdr->ack_seq = tcphdr_cpy.ack_seq;
 
-	/* proto has changed */
-	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be16),
-			     (void *)&proto_new, sizeof(__be16), 0);
-	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
-			    0, csum, BPF_F_PSEUDO_HDR);
-
-	/* UDP Length vs Urgent Pointer */
-	csum = bpf_csum_diff((void *)&zero, sizeof(__be16),
-			     (void *)&udp_len, sizeof(__be16), 0);
-	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
-			    0, csum, 0);
-
+	/* Change protocol: TCP -> UDP */
 	if (iphdr) {
+		__be16 proto_old = bpf_htons(IPPROTO_TCP);
+		__be16 proto_new = bpf_htons(IPPROTO_UDP);
+
+		iphdr->protocol = IPPROTO_UDP;
+
 		bpf_l3_csum_replace(skb, ((void*)iphdr - data) +
 					  offsetof(struct iphdr, check),
-					  proto_old, proto_new, sizeof(__be16));
+				    proto_old, proto_new, sizeof(__be16));
+		bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
+				    proto_old, proto_new,
+				    BPF_F_PSEUDO_HDR | sizeof(__be16));
+	} else if (ipv6hdr) {
+		__be32 proto_old = bpf_htonl(IPPROTO_TCP);
+		__be32 proto_new = bpf_htonl(IPPROTO_UDP);
+
+		ipv6hdr->nexthdr = IPPROTO_UDP;
+
+		bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
+				    proto_old, proto_new,
+				    BPF_F_PSEUDO_HDR | sizeof(__be32));
 	}
+
+	/* UDP Length vs Urgent Pointer */
+	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
+			    zero, udp_len,
+			    BPF_F_PSEUDO_HDR | sizeof(__be16));
 out:
 	return;
 }
