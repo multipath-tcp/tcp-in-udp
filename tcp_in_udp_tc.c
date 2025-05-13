@@ -165,6 +165,10 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	if (parse_udphdr(nh, data_end, (struct udphdr**)&tuhdr) < 0)
 		goto out;
 
+	if (tuhdr->udphdr.source != bpf_htons(PORT) &&
+	    tuhdr->udphdr.dest != bpf_htons(PORT))
+		goto out;
+
 	if ((void *)tuhdr + sizeof(struct tcphdr) > data_end) {
 		bpf_printk("udp-tcp: TODO: data_end too small: ulen:%u\n",
 			   bpf_ntohs(tuhdr->udphdr.len));
@@ -176,10 +180,6 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 			   skb->len, skb->gso_segs, skb->gso_size);
 		goto out;
 	}
-
-	if (tuhdr->udphdr.source != bpf_htons(PORT) &&
-	    tuhdr->udphdr.dest != bpf_htons(PORT))
-		goto out;
 
 	/* Change protocol: UDP -> TCP */
 	if (iphdr)
