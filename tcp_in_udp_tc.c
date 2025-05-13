@@ -217,7 +217,7 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	/* UDP Length vs Urgent Pointer */
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
 			    tuhdr_cpy.udphdr.len, zero,
-			    BPF_F_PSEUDO_HDR | sizeof(__be16));
+			    sizeof(__be16));
 out:
 	return;
 }
@@ -341,7 +341,7 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	/* UDP Length vs Urgent Pointer */
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
 			    zero, udp_len,
-			    BPF_F_PSEUDO_HDR | sizeof(__be16));
+			    sizeof(__be16));
 out:
 	return;
 }
