@@ -1,0 +1,17 @@
+tcp-udp: 0xc0a800bd:35098 > 0x6684c98d:5201 csum:0x1b8d ulen:40 dlen:40 ilen:60, proto:17
+tcp-udp: hex: 891a1451
+tcp-udp: hex: 00281b8d
+tcp-udp: hex: a002faf0
+tcp-udp: hex: 0fc7da45
+tcp-udp: hex: 00000000
+tcp-udp: hex: 020405b4
+tcp-udp: hex: 0402080a
+tcp-udp: hex: e994d5ca
+tcp-udp: hex: 00000000
+tcp-udp: hex: 01030307
+tcp-udp: csum: 0xf1a5 -> 0x1b8d
+
+18:12:23.835590 20:7c:14:f3:d2:72 > fc:3f:fc:9f:11:2d, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 64, id 28069, offset 0, flags [DF], proto UDP (17), length 60)
+    192.168.0.189.35098 > 102.132.201.141.5201: [bad udp cksum 0x1b8d -> 0x148d!] UDP, length 32
+
+0x148d
