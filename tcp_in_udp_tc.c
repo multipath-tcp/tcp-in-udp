@@ -254,6 +254,74 @@ out:
  ** Egress **
  ************/
 
+static __wsum csum_partial(const void *buf, __u16 len, void *data_end)
+{
+	__u16 *p = (__u16 *)buf;
+	int num_u16 = len >> 1;
+	__wsum sum = 0;
+	int i;
+
+	if (len > 1480 || buf + len > data_end) {
+		bpf_printk("we don't have the end of the packet (len:%u)...\n", len);
+		return 0;
+	}
+
+	for (i = 0; i < 740; i++) {
+		if ((void *)(p + i + 1) > data_end)
+			break;
+		sum += p[i];
+	}
+
+	return sum;
+}
+
+static __u16 csum_fold(__u32 csum)
+{
+	csum = (csum & 0xffff) + (csum >> 16);
+	csum = (csum & 0xffff) + (csum >> 16);
+
+	return (__u16)~csum;
+}
+
+static inline __sum16 csum_tcpudp_magic(__be32 saddr, __be32 daddr,
+					__u32 len, __u8 proto,
+					__wsum csum)
+{
+	__u64 s = csum;
+
+	s += (__u32)saddr;
+	s += (__u32)daddr;
+	s += bpf_htons(proto + len);
+	s = (s & 0xffffffff) + (s >> 32);
+	s = (s & 0xffffffff) + (s >> 32);
+
+	return csum_fold((__u32)s);
+}
+
+//typedef __u16 __sum16;
+static __always_inline __sum16
+udp_checksum(struct __sk_buff *skb, __u8 ip_off, __u8 udp_off)
+{
+	void *data_end = (void *)(long)skb->data_end;
+	void *data = (void *)(long)skb->data;
+	struct iphdr *iph = data + ip_off;
+	struct udphdr *udph = data + udp_off;
+	unsigned long sum;
+
+	if ((void *)iph + sizeof(*iph) > data_end)
+		return -1;
+
+	if ((void *)udph + sizeof(*udph) > data_end)
+		return -1;
+
+	sum = csum_partial(udph, bpf_ntohs(udph->len), data_end);
+	return csum_tcpudp_magic(iph->saddr, iph->daddr, bpf_ntohs(udph->len),
+				 IPPROTO_UDP, sum);
+
+}
+
+// TODO: split client/server, e.g. client: port dest egress, source ingress
+
 static __always_inline void
 tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	   struct iphdr *iphdr, struct ipv6hdr *ipv6hdr)
@@ -266,6 +334,7 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	__be16 udp_len;
 	__be32 len32, zero = 0;
 	__wsum csum;
+	__be16 diff_csum = 0, full_csum = 0;
 
 	if (parse_tcphdr(nh, data_end, &tcphdr) < 0)
 		goto out;
@@ -315,9 +384,9 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	tuhdr->seq = tcphdr_cpy.seq;
 	tuhdr->ack_seq = tcphdr_cpy.ack_seq;
 
-	/* tuhdr->udphdr.len = udp_len; */
-	bpf_skb_store_bytes(skb, nh_off + offsetof(struct udphdr, len),
-			    &udp_len, sizeof(udp_len), BPF_F_RECOMPUTE_CSUM);
+	tuhdr->udphdr.len = udp_len;
+	/*bpf_skb_store_bytes(skb, nh_off + offsetof(struct udphdr, len),
+			    &udp_len, sizeof(udp_len), BPF_F_RECOMPUTE_CSUM);*/
 
 	/* Change protocol: TCP -> UDP */
 	if (iphdr) {
@@ -326,20 +395,46 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 		int ip_off = (void*)iphdr - data;
 		__u8 proto = IPPROTO_UDP;
 
-		/* iphdr->protocol = IPPROTO_UDP; */
-		bpf_skb_store_bytes(skb, ip_off + offsetof(struct iphdr, protocol),
-				    &proto, sizeof(proto), BPF_F_RECOMPUTE_CSUM);
+		iphdr->protocol = IPPROTO_UDP;
+		diff_csum = tuhdr->udphdr.check;
+		tuhdr->udphdr.check = 0;
+		long len_diff = data_end - (void *)tuhdr;
+		if (len_diff > 0)
+			len_diff = bpf_ntohs(udp_len) - len_diff;
+		if (len_diff > 0)
+			bpf_skb_pull_data(skb, data_end - data + len_diff);
+		full_csum = udp_checksum(skb, ip_off, nh_off);
+		/* tuhdr->udphdr.check = diff_csum; */
+		bpf_skb_store_bytes(skb, nh_off + offsetof(struct udphdr, check),
+				    &diff_csum, sizeof(diff_csum), 0);
+		/*bpf_skb_store_bytes(skb, ip_off + offsetof(struct iphdr, protocol),
+				    &proto, sizeof(proto), BPF_F_RECOMPUTE_CSUM);*/
 
 		bpf_l3_csum_replace(skb, ip_off + offsetof(struct iphdr, check),
 				    proto_old, proto_new, sizeof(__be16));
+		/*
+		bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
+				    proto_old, proto_new,
+				    BPF_F_PSEUDO_HDR | sizeof(__be16));
+		*/
 	} else if (ipv6hdr) {
+		/*
+		__be32 proto_old = bpf_htonl(IPPROTO_TCP);
+		__be32 proto_new = bpf_htonl(IPPROTO_UDP);
+		*/
 		int ip_off = (void*)ipv6hdr - data;
 		__u8 proto = IPPROTO_UDP;
 
-		/* ipv6hdr->nexthdr = IPPROTO_UDP; */
-		bpf_skb_store_bytes(skb, ip_off + offsetof(struct ipv6hdr, nexthdr),
-				    &proto, sizeof(proto), BPF_F_RECOMPUTE_CSUM);
+		ipv6hdr->nexthdr = IPPROTO_UDP;
 
+		/*bpf_skb_store_bytes(skb, ip_off + offsetof(struct ipv6hdr, nexthdr),
+				    &proto, sizeof(proto), BPF_F_RECOMPUTE_CSUM);*/
+
+		/*
+		bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
+				    proto_old, proto_new,
+				    BPF_F_PSEUDO_HDR | sizeof(__be32));
+		*/
 	}
 	__be32 proto_old = bpf_htonl(IPPROTO_TCP);
 	__be32 proto_new = bpf_htonl(IPPROTO_UDP);
@@ -352,7 +447,16 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 			     (void *)&len32, sizeof(__be32), csum);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
 			    0, csum, BPF_F_PSEUDO_HDR);
+	long err = bpf_skb_load_bytes(skb, nh_off + offsetof(struct udphdr, check), &diff_csum, sizeof(__be16));
+	if (full_csum != diff_csum)
+		bpf_printk("tcp-udp: csum: full:%u, diff:%u, len:%u, seq:%u, ack_seq:%u, s:%u, a:%u, f:%u, r%u, p:%u, err:%d\n", bpf_ntohs(full_csum), bpf_ntohs(diff_csum), bpf_ntohs(udp_len), bpf_ntohl(tcphdr_cpy.seq), bpf_ntohl(tcphdr_cpy.seq), tcphdr_cpy.syn, tcphdr_cpy.ack, tcphdr_cpy.fin, tcphdr_cpy.rst, tcphdr_cpy.psh, err);
 
+	/* UDP Length vs Urgent Pointer */
+	/*
+	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
+			    zero, udp_len,
+			    sizeof(__be16));
+	*/
 out:
 	return;
 }
