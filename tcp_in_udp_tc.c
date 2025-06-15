@@ -26,7 +26,7 @@ struct hdr_cursor {
 	void *pos;
 };
 
-__u16 PORT = 5201;
+__u16 PORT = 5201; // TODO: maybe this can be added in tc filter?
 
 /*******************************************
  ** parse_*hdr helpers from XDP tutorials **
@@ -153,7 +153,7 @@ static __always_inline void
 udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	   struct iphdr *iphdr, struct ipv6hdr *ipv6hdr)
 {
-	void *data_end = (void *)(long)skb->data_end;
+	void *data_end = (void *)(long)skb->data_end; /* end of the payload */
 	void *data = (void *)(long)skb->data;
 	struct tcp_in_udp_hdr *tuhdr, tuhdr_cpy;
 	struct tcphdr *tcphdr = nh->pos;
@@ -218,6 +218,72 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
 			    tuhdr_cpy.udphdr.len, zero,
 			    sizeof(__be16));
+
+	#if 0
+	__be32 zero = 0;
+	__be32 csum = 0;
+	__be32 len32;
+	len32 = bpf_ntohl(bpf_ntohs(tuhdr_cpy.udphdr.len));
+	/* Change protocol: UDP -> TCP */
+	if (iphdr) {
+		__be16 proto_old = bpf_htons(IPPROTO_UDP);
+		__be16 proto_new = bpf_htons(IPPROTO_TCP);
+		struct {
+			__u8 pad;
+			__u8 protocol;
+			__be16 len;
+		} bp_old, bp_new;
+
+		bp_old.len = bp_new.len = tuhdr_cpy.udphdr.len;
+		bp_old.pad = bp_new.pad = 0;
+		bp_old.protocol = IPPROTO_TCP;
+		bp_new.protocol = IPPROTO_UDP;
+
+		iphdr->protocol = IPPROTO_TCP;
+
+		csum = bpf_csum_diff((void *)&bp_old, sizeof(bp_old),
+				     (void *)&bp_new, sizeof(bp_new), 0);
+
+		bpf_l3_csum_replace(skb, ((void*)iphdr - data) +
+					  offsetof(struct iphdr, check),
+				    proto_old, proto_new, sizeof(__be16));
+	} else if (ipv6hdr) {
+		__be32 proto_old = bpf_htonl(IPPROTO_UDP);
+		__be32 proto_new = bpf_htonl(IPPROTO_TCP);
+
+		ipv6hdr->nexthdr = IPPROTO_TCP;
+
+		csum = bpf_csum_diff((void *)&proto_old, sizeof(__be32),
+				     (void *)&proto_new, sizeof(__be32), 0);
+	}
+
+	/* UDP Length vs Urgent Pointer */
+	csum = bpf_csum_diff((void *)&len32, sizeof(__be32),
+			     (void *)&zero, sizeof(__be32), csum);
+	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
+			    0, csum, BPF_F_PSEUDO_HDR);
+	#endif
+
+	#if 0
+	__be32 csum;
+	/* proto has changed */
+	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be16),
+			     (void *)&proto_new, sizeof(__be16), 0);
+	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
+			    0, csum, BPF_F_PSEUDO_HDR);
+
+	/* UDP Length vs Urgent Pointer */
+	csum = bpf_csum_diff((void *)&tuhdr_cpy.udphdr.len, sizeof(__be16),
+			     (void *)&zero, sizeof(__be16), 0);
+	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
+			    0, csum, 0);
+	#endif
+
+	#if 0
+	tcphdr->check = 0;
+	if (iphdr)
+		tcphdr->check = tcp_checksum(iphdr, tcphdr, data_end);
+	#endif
 out:
 	return;
 }
@@ -326,7 +392,7 @@ static __always_inline void
 tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	   struct iphdr *iphdr, struct ipv6hdr *ipv6hdr)
 {
-	void *data_end = (void *)(long)skb->data_end;
+	void *data_end = (void *)(long)skb->data_end; /* !end of the TCP hdr! To get data: bpf_skb_pull_data() */
 	void *data = (void *)(long)skb->data;
 	struct tcp_in_udp_hdr *tuhdr = nh->pos;
 	struct tcphdr *tcphdr, tcphdr_cpy;
@@ -387,6 +453,19 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	tuhdr->udphdr.len = udp_len;
 	/*bpf_skb_store_bytes(skb, nh_off + offsetof(struct udphdr, len),
 			    &udp_len, sizeof(udp_len), BPF_F_RECOMPUTE_CSUM);*/
+	#if 0
+	bpf_skb_store_bytes(skb, sizeof(*eth) + offsetof(struct iphdr, saddr), &l3_new_fields, sizeof(l3_new_fields), BPF_F_RECOMPUTE_CSUM);
+	bpf_skb_store_bytes(skb, sizeof(*eth) + sizeof(*ip4h), &l4_new_fields, sizeof(l4_new_fields), BPF_F_RECOMPUTE_CSUM);
+
+	// Correct the Checksum
+	__u64 l3sum = bpf_csum_diff((__u32 *)&l3_original_fields, sizeof(l3_original_fields), (__u32 *)&l3_new_fields, sizeof(l3_new_fields), 0);
+	__u64 l4sum = bpf_csum_diff((__u32 *)&l4_original_fields, sizeof(l4_original_fields), (__u32 *)&l4_new_fields, sizeof(l4_new_fields), l3sum);
+
+	// update checksum
+	int csumret = bpf_l4_csum_replace(skb, sizeof(*eth) + sizeof(*ip4h) + offsetof(struct udphdr, check), 0, l4sum, BPF_F_PSEUDO_HDR);
+	csumret |= bpf_l3_csum_replace(skb, sizeof(*eth) + offsetof(struct iphdr, check), 0, l3sum, 0);
+	if (csumret)
+	#endif
 
 	/* Change protocol: TCP -> UDP */
 	if (iphdr) {
@@ -475,6 +554,7 @@ int tcp_egress_ack(struct __sk_buff *skb)
 	eth_type = parse_ethhdr(&nh, data_end, &eth);
 	if (eth_type == bpf_htons(ETH_P_IP)) {
 		ip_type = parse_iphdr(&nh, data_end, &iphdr);
+		// TODO: check for packet frag
 	} else if (eth_type == bpf_htons(ETH_P_IPV6)) {
 		ip_type = parse_ip6hdr(&nh, data_end, &ipv6hdr);
 	} else {

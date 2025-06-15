@@ -49,7 +49,7 @@ tc_client()
 	tc -n "${ns}" filter show dev "${iface}" egress
 	tc -n "${ns}" filter show dev "${iface}" ingress
 
-	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off ufo off sg off
+	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off ufo off sg off # rx off tx off
 }
 
 tc_server()
@@ -66,15 +66,15 @@ tc_server()
 	tc -n "${ns}" filter show dev "${iface}" egress
 	tc -n "${ns}" filter show dev "${iface}" ingress
 
-	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off ufo off sg off
+	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off ufo off sg off # rx off tx off
 }
 
 capture()
 {
-	ip netns exec "${NS}_cli" tcpdump -i cpe -s 100 -w cli_cpe.pcap tcp or udp &
-	ip netns exec "${NS}_int" tcpdump -i cpe -s 100 -w int_cpe.pcap tcp or udp &
-	ip netns exec "${NS}_int" tcpdump -i net -s 100 -w int_net.pcap tcp or udp &
-	ip netns exec "${NS}_srv" tcpdump -i net -s 100 -w srv_net.pcap tcp or udp &
+	ip netns exec "${NS}_cli" tcpdump -i cpe -w cli_cpe.pcap tcp or udp & # -s 100
+	ip netns exec "${NS}_int" tcpdump -i cpe -w int_cpe.pcap tcp or udp & # -s 100
+	ip netns exec "${NS}_int" tcpdump -i net -w int_net.pcap tcp or udp & # -s 100
+	ip netns exec "${NS}_srv" tcpdump -i net -w srv_net.pcap tcp or udp & # -s 100
 }
 
 setup()
@@ -93,6 +93,17 @@ setup()
 	ip link add "cpe" netns "${NS}_int" type veth peer name "int" netns "${NS}_cpe"
 	ip link add "int" netns "${NS}_net" type veth peer name "net" netns "${NS}_int"
 	ip link add "net" netns "${NS}_srv" type veth peer name "srv" netns "${NS}_net"
+
+	# if false; then
+	ip netns exec "${NS}_cli" ethtool -K "cpe" rx off tx off
+	ip netns exec "${NS}_cpe" ethtool -K "cli" rx off tx off
+	ip netns exec "${NS}_cpe" ethtool -K "int" rx off tx off
+	ip netns exec "${NS}_int" ethtool -K "cpe" rx off tx off
+	ip netns exec "${NS}_int" ethtool -K "net" rx off tx off
+	ip netns exec "${NS}_net" ethtool -K "int" rx off tx off
+	ip netns exec "${NS}_net" ethtool -K "srv" rx off tx off
+	ip netns exec "${NS}_srv" ethtool -K "net" rx off tx off
+	# fi
 
 	ip -n "${NS}_cli" link set "cpe" up
 	ip -n "${NS}_cli" addr add dev "cpe" 10.0.0.2/24
@@ -126,7 +137,7 @@ setup()
 
 setup
 server
-# capture
+capture
 
 tc_client
 tc_server
