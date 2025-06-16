@@ -349,6 +349,16 @@ static __wsum csum_partial(const void *buf, __u16 len, void *data_end)
 		sum += p[i];
 	}
 
+	/* left-over byte, if any */
+	if (len % 2 != 0) {
+		i <<= 1;
+		if (buf + i >= data_end) {
+			bpf_printk("csum: cannot get the end from len:%u i:%d\n", len, i);
+			return sum;
+		}
+		sum += *((__u8 *)(buf + i));
+	}
+
 	return sum;
 }
 
