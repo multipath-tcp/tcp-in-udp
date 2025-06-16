@@ -514,10 +514,12 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	}
 
 #ifndef COMPUTE_FULL_CSUM
+	/* TODO: split pseudo HDR (needed for PARTIAL) and len/urg */
 	csum = bpf_csum_diff((void *)&csum_diff_old, sizeof(__be32),
 			     (void *)&csum_diff_new, sizeof(__be32), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
 			    0, csum, BPF_F_PSEUDO_HDR);
+	/* TODO: handle checksum set to 0: not fixed with BPF_F_MARK_MANGLED_0 */
 #if defined(CHECK_CSUM)
 	long err = bpf_skb_load_bytes(skb, nh_off + offsetof(struct udphdr, check),
 				      &diff_csum, sizeof(__be16));
