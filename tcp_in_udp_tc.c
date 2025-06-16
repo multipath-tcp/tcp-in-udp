@@ -37,7 +37,7 @@ struct hdr_cursor {
 
 __u16 PORT = 5201; // TODO: maybe this can be added in tc filter?
 // #define CHECK_CSUM
-//#define COMPUTE_FULL_CSUM
+// #define COMPUTE_FULL_CSUM
 
 /*******************************************
  ** parse_*hdr helpers from XDP tutorials **
@@ -382,7 +382,7 @@ static inline __sum16 csum_tcpudp_magic(__be32 saddr, __be32 daddr,
 	s = (s & 0xffffffff) + (s >> 32);
 	s = (s & 0xffffffff) + (s >> 32);
 
-	return csum_fold((__u32)s);
+	return csum_fold((__u32)s) ? : 0xffff;
 }
 
 //typedef __u16 __sum16;
@@ -519,7 +519,13 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
 			    0, csum, BPF_F_PSEUDO_HDR);
 #if defined(CHECK_CSUM)
-	long err = bpf_skb_load_bytes(skb, nh_off + offsetof(struct udphdr, check), &diff_csum, sizeof(__be16));
+	long err = bpf_skb_load_bytes(skb, nh_off + offsetof(struct udphdr, check),
+				      &diff_csum, sizeof(__be16));
+	if (diff_csum == 0) {
+		diff_csum = ~diff_csum;
+		bpf_skb_store_bytes(skb, nh_off + offsetof(struct udphdr, check),
+				    &diff_csum, sizeof(diff_csum), 0);
+	}
 	if (full_csum != diff_csum)
 		bpf_printk("tcp-udp: csum: full:%u, diff:%u, len:%u, seq:%u, ack_seq:%u, s:%u, a:%u, f:%u, r%u, p:%u, err:%d\n", bpf_ntohs(full_csum), bpf_ntohs(diff_csum), bpf_ntohs(udp_len), bpf_ntohl(tcphdr_cpy.seq), bpf_ntohl(tcphdr_cpy.ack_seq), tcphdr_cpy.syn, tcphdr_cpy.ack, tcphdr_cpy.fin, tcphdr_cpy.rst, tcphdr_cpy.psh, err);
 #endif
