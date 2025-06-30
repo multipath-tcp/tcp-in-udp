@@ -93,13 +93,33 @@ static uint16_t udp_checksum(struct iphdr *ip, struct udphdr *udp, int len)
 int main(int argc, char *argv[])
 {
 	struct iphdr ip = { 0 };
-	uint32_t udp[10] = { htonl(0x891a1451), htonl(0x00281b8d), htonl(0xa002faf0), htonl(0x0fc7da45), htonl(0x00000000), htonl(0x020405b4), htonl(0x0402080a), htonl(0xe994d5ca), htonl(0x00000000), htonl(0x01030307) };
+	uint32_t udp[10] = { htonl(0xcc6a1451), htonl(0x0028f29f), htonl(0xa002faf0), htonl(0xc2fa1294), htonl(0x00000000), htonl(0x020405b4), htonl(0x0402080a), htonl(0x994b6f2f), htonl(0x00000000), htonl(0x01030307) };
 	uint16_t csum;
 
-	ip.saddr = htonl(0xc0a800bd);
+	ip.saddr = htonl(0xc0a801b7);
 	ip.daddr = htonl(0x6684c98d);
 
 	csum = udp_checksum(&ip, (struct udphdr*)&udp, sizeof(udp));
 
 	printf("csum: 0x%x\n", ntohs(csum));
 }
+
+#if 0
+           <...>-520314  [002] b..1. 1229445.657995: bpf_trace_printk: tcp-udp: 0xc0a801b7:52330 > 0x6684c98d:5201 csum:0xf29f ulen:40 dlen:40 ilen:60
+           <...>-520314  [002] b..1. 1229445.658007: bpf_trace_printk: tcp-udp: hex: 0xcc6a1451
+           <...>-520314  [002] b..1. 1229445.658008: bpf_trace_printk: tcp-udp: hex: 0x0028f29f
+           <...>-520314  [002] b..1. 1229445.658008: bpf_trace_printk: tcp-udp: hex: 0xa002faf0
+           <...>-520314  [002] b..1. 1229445.658009: bpf_trace_printk: tcp-udp: hex: 0xc2fa1294
+           <...>-520314  [002] b..1. 1229445.658010: bpf_trace_printk: tcp-udp: hex: 0x00000000
+           <...>-520314  [002] b..1. 1229445.658011: bpf_trace_printk: tcp-udp: hex: 0x020405b4
+           <...>-520314  [002] b..1. 1229445.658012: bpf_trace_printk: tcp-udp: hex: 0x0402080a
+           <...>-520314  [002] b..1. 1229445.658013: bpf_trace_printk: tcp-udp: hex: 0x994b6f2f
+           <...>-520314  [002] b..1. 1229445.658013: bpf_trace_printk: tcp-udp: hex: 0x00000000
+          iperf3-520314  [002] b..1. 1229445.658014: bpf_trace_printk: tcp-udp: hex: 0x01030307
+          iperf3-520314  [002] b..1. 1229445.658021: bpf_trace_printk: tcp-udp: csum: full:0x9ba5, diff:0xf2d2, len:40, seq:3271168660, ack_seq:0, s:1, a:0, f:0, r0, p:0, err:0
+
+16:36:49.770507 20:7c:14:f3:d2:72 > 20:97:27:08:a8:f3, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 64, id 11585, offset 0, flags [DF], proto UDP (17), length 60)
+    192.168.1.183.52330 > 102.132.201.141.5201: [bad udp cksum 0xf2d2 -> 0x0028!] UDP, length 32
+
+    computed csum: 0x9ba5
+#endif

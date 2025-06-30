@@ -37,6 +37,7 @@ struct hdr_cursor {
 
 __u16 PORT = 5201; // TODO: maybe this can be added in tc filter?
 // #define CHECK_CSUM
+// #define PRINT_PKT // to be used with checksum.c later on
 // #define COMPUTE_FULL_CSUM
 
 /*******************************************
@@ -487,6 +488,19 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 
 #if defined(CHECK_CSUM) || defined(COMPUTE_FULL_CSUM)
 		diff_csum = tuhdr->udphdr.check;
+#ifdef PRINT_PKT
+		bpf_printk("tcp-udp: 0x%x:%u > 0x%x:%u csum:0x%x ulen:%u dlen:%u ilen:%u\n", bpf_ntohl(iphdr->saddr), bpf_ntohs(tuhdr->udphdr.source), bpf_ntohl(iphdr->daddr), bpf_ntohs(tuhdr->udphdr.dest), bpf_ntohs(diff_csum), bpf_ntohs(udp_len), data_end - (void*)tuhdr, bpf_ntohs(iphdr->tot_len));
+		__be32 *t = (__be32 *)tuhdr;
+		// bpf_printk("tcp-udp: hex: %x %x %x %x %x\n", bpf_ntohl(*t), bpf_ntohl(*(t+1)), bpf_ntohl(*(t+2)), bpf_ntohl(*(t+3)), bpf_ntohl(*(t+4)));
+		for (int i = 0; i < 40; i += 4) {
+			if ((void *)(t + 1) > data_end) {
+				bpf_printk("tcp-udp: end\n");
+				break;
+			}
+			bpf_printk("tcp-udp: hex: %x\n", bpf_ntohl(*t));
+			t++;
+		}
+#endif
 		tuhdr->udphdr.check = 0;
 		long len_diff = data_end - (void *)tuhdr;
 		if (len_diff > 0)
@@ -529,7 +543,7 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 				    &diff_csum, sizeof(diff_csum), 0);
 	}
 	if (full_csum != diff_csum)
-		bpf_printk("tcp-udp: csum: full:%u, diff:%u, len:%u, seq:%u, ack_seq:%u, s:%u, a:%u, f:%u, r%u, p:%u, err:%d\n", bpf_ntohs(full_csum), bpf_ntohs(diff_csum), bpf_ntohs(udp_len), bpf_ntohl(tcphdr_cpy.seq), bpf_ntohl(tcphdr_cpy.ack_seq), tcphdr_cpy.syn, tcphdr_cpy.ack, tcphdr_cpy.fin, tcphdr_cpy.rst, tcphdr_cpy.psh, err);
+		bpf_printk("tcp-udp: csum: full:0x%x, diff:0x%x, len:%u, seq:%u, ack_seq:%u, s:%u, a:%u, f:%u, r%u, p:%u, err:%d\n", bpf_ntohs(full_csum), bpf_ntohs(diff_csum), bpf_ntohs(udp_len), bpf_ntohl(tcphdr_cpy.seq), bpf_ntohl(tcphdr_cpy.ack_seq), tcphdr_cpy.syn, tcphdr_cpy.ack, tcphdr_cpy.fin, tcphdr_cpy.rst, tcphdr_cpy.psh, err);
 #endif
 #endif
 
