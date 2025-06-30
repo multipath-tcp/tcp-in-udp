@@ -117,10 +117,10 @@ setup()
 
 	ip -n "${NS}_int" link set "cpe" up
 	ip -n "${NS}_int" addr add dev "cpe" 10.0.1.1/24
-	tc -n "${NS}_int" qdisc add dev "cpe" root netem rate 10mbit delay 5ms
+	#tc -n "${NS}_int" qdisc add dev "cpe" root netem rate 10mbit delay 5ms
 	ip -n "${NS}_int" link set "net" up
 	ip -n "${NS}_int" addr add dev "net" 10.0.3.2/24
-	tc -n "${NS}_int" qdisc add dev "net" root netem rate 10mbit delay 5ms
+	#tc -n "${NS}_int" qdisc add dev "net" root netem rate 10mbit delay 5ms
 	ip -n "${NS}_int" route add 10.0.0.0/24 via 10.0.1.2 dev "cpe"
 	ip -n "${NS}_int" route add 10.0.2.0/24 via 10.0.3.1 dev "net"
 

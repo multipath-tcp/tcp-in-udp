@@ -528,7 +528,7 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	}
 
 #ifndef COMPUTE_FULL_CSUM
-	/* TODO: split pseudo HDR (needed for PARTIAL) and len/urg */
+	/* TODO: split pseudo HDR (needed for PARTIAL) and len/urg: see how it was done with prev commits */
 	csum = bpf_csum_diff((void *)&csum_diff_old, sizeof(__be32),
 			     (void *)&csum_diff_new, sizeof(__be32), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
