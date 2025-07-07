@@ -358,6 +358,8 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 
 	/* after mangling on headers through direct packet access */
 	bpf_set_hash_invalid(skb);
+	/* force skb_gso_reset() */
+	bpf_skb_change_tail(skb, skb->len, 0);
 out:
 	return;
 }
