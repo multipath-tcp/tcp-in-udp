@@ -344,14 +344,14 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	__be32 proto_old = bpf_htonl(IPPROTO_TCP);
 	__be32 proto_new = bpf_htonl(IPPROTO_UDP);
 	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be32),
-			     (void *)&proto_new, sizeof(__be32), 0);
+			     (void *)&proto_new, sizeof(__be32), BPF_F_PSEUDO_HDR);
 
 	/* UDP Length vs Urgent Pointer */
 	len32 = bpf_ntohl(bpf_ntohs(udp_len));
 	csum = bpf_csum_diff((void *)&zero, sizeof(__be32),
 			     (void *)&len32, sizeof(__be32), csum);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
-			    0, csum, BPF_F_PSEUDO_HDR);
+			    0, csum, 0);
 
 out:
 	return;
