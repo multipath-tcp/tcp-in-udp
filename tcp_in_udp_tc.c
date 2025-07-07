@@ -218,6 +218,9 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
 			    tuhdr_cpy.udphdr.len, zero,
 			    sizeof(__be16));
+
+	/* after mangling on headers through direct packet access */
+	bpf_set_hash_invalid(skb);
 out:
 	return;
 }
@@ -353,6 +356,8 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
 			    0, csum, 0);
 
+	/* after mangling on headers through direct packet access */
+	bpf_set_hash_invalid(skb);
 out:
 	return;
 }
