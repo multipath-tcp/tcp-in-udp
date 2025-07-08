@@ -266,9 +266,10 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	struct tcp_in_udp_hdr *tuhdr = nh->pos;
 	struct tcphdr *tcphdr, tcphdr_cpy;
 	int nh_off = nh->pos - data;
-	__be16 udp_len;
-	__be32 len32, zero = 0;
-	__wsum csum;
+	__be16 udp_len, zero = 0;
+	__be16 proto_old = bpf_htons(IPPROTO_TCP);
+	__be16 proto_new = bpf_htons(IPPROTO_UDP);
+	__u8 proto = IPPROTO_UDP;
 
 	if (parse_tcphdr(nh, data_end, &tcphdr) < 0)
 		goto out;
@@ -324,10 +325,7 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 
 	/* Change protocol: TCP -> UDP */
 	if (iphdr) {
-		__be16 proto_old = bpf_htons(IPPROTO_TCP);
-		__be16 proto_new = bpf_htons(IPPROTO_UDP);
 		int ip_off = (void*)iphdr - data;
-		__u8 proto = IPPROTO_UDP;
 
 		/* iphdr->protocol = IPPROTO_UDP; */
 		bpf_skb_store_bytes(skb, ip_off + offsetof(struct iphdr, protocol),
@@ -337,26 +335,18 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 				    proto_old, proto_new, sizeof(__be16));
 	} else if (ipv6hdr) {
 		int ip_off = (void*)ipv6hdr - data;
-		__u8 proto = IPPROTO_UDP;
 
 		/* ipv6hdr->nexthdr = IPPROTO_UDP; */
 		bpf_skb_store_bytes(skb, ip_off + offsetof(struct ipv6hdr, nexthdr),
 				    &proto, sizeof(proto), BPF_F_RECOMPUTE_CSUM);
 
 	}
-	__be32 proto_old = bpf_htonl(IPPROTO_TCP);
-	__be32 proto_new = bpf_htonl(IPPROTO_UDP);
-	csum = bpf_csum_diff((void *)&proto_old, sizeof(__be32),
-			     (void *)&proto_new, sizeof(__be32), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
-			    0, csum, BPF_F_PSEUDO_HDR);
+			    proto_old, proto_new, sizeof(__be16) | BPF_F_PSEUDO_HDR);
 
 	/* UDP Length vs Urgent Pointer */
-	len32 = bpf_ntohl(bpf_ntohs(udp_len));
-	csum = bpf_csum_diff((void *)&zero, sizeof(__be32),
-			     (void *)&len32, sizeof(__be32), 0);
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
-			    0, csum, 0);
+			    zero, udp_len, sizeof(__be16));
 
 	/* after mangling on headers through direct packet access */
 	bpf_set_hash_invalid(skb);
