@@ -17,6 +17,9 @@ netns()
 
 cleanup()
 {
+	tc -n "${NS}_cpe" -s action show action csum
+	tc -n "${NS}_net" -s action show action csum
+
 	local suffix
 	for suffix in "${HOSTS[@]}"; do
 		local ns="${NS}_${suffix}"
