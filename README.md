@@ -114,13 +114,13 @@ Load it with `tc` command:
 - Client:
   ```
   tc qdisc add dev "${IFACE}" clsact
-  tc filter add dev "${IFACE}" egress  bpf da obj tcp_in_udp_tc.o sec tc_client_egress action csum udp index 100
+  tc filter add dev "${IFACE}" egress  bpf obj tcp_in_udp_tc.o sec tc_client_egress action csum udp index 100
   tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_client_ingress
   ```
 - Server:
   ```
   tc qdisc add dev "${IFACE}" clsact
-  tc filter add dev "${IFACE}" egress  bpf da obj tcp_in_udp_tc.o sec tc_server_egress action csum udp index 100
+  tc filter add dev "${IFACE}" egress  bpf obj tcp_in_udp_tc.o sec tc_server_egress action csum udp index 100
   tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_server_ingress
   ```
 
