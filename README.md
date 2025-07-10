@@ -125,12 +125,15 @@ Load it with `tc` command:
   ```
 
 GRO/TSO cannot be used on this interface, because each UDP packet will carry a
-part of the TCP headers, not part of the data that can be merged:
+part of the TCP headers as part of the data: this is specific to one packet, and
+it cannot be merged with the next data. Please use this:
 
 ```
 ethtool -K "${IFACE}" gro off lro off gso off tso off ufo off sg off
 ip link set ${IFACE} gso_max_segs 1
 ```
+
+(to be checked: maybe it is enough to disable `gro` and `gso/tso`.)
 
 Note: to get some stats, in egress, it is possible to use:
 
