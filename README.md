@@ -129,6 +129,7 @@ part of the TCP headers, not part of the data that can be merged:
 
 ```
 ethtool -K "${IFACE}" gro off lro off gso off tso off ufo off sg off
+ip link set ${IFACE} gso_max_segs 1
 ```
 
 ## Identification
