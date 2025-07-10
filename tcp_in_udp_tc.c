@@ -257,7 +257,7 @@ out:
  ** Egress **
  ************/
 
-static __always_inline void
+static __always_inline int
 tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	   struct iphdr *iphdr, struct ipv6hdr *ipv6hdr)
 {
@@ -337,8 +337,10 @@ tcp_to_udp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	/* UDP Length vs Urgent Pointer */
 	bpf_l4_csum_replace(skb, nh_off + offsetof(struct udphdr, check),
 			    zero, udp_len, sizeof(__be16));
+
+	return TC_ACT_PIPE;
 out:
-	return;
+	return TC_ACT_OK;
 }
 
 SEC("tc_egress")
@@ -347,7 +349,7 @@ int tcp_egress_ack(struct __sk_buff *skb)
 	void *data_end = (void *)(long)skb->data_end;
 	void *data = (void *)(long)skb->data;
 	struct hdr_cursor nh = { .pos = data };
-	int eth_type, ip_type, ret = TC_ACT_PIPE;
+	int eth_type, ip_type, ret = TC_ACT_OK;
 	struct ipv6hdr *ipv6hdr = NULL;
 	struct iphdr *iphdr = NULL;
 	struct ethhdr *eth;
@@ -362,7 +364,7 @@ int tcp_egress_ack(struct __sk_buff *skb)
 	}
 
 	if (ip_type == IPPROTO_TCP)
-		tcp_to_udp(skb, &nh, iphdr, ipv6hdr);
+		return tcp_to_udp(skb, &nh, iphdr, ipv6hdr);
 
 out:
 	return ret;
