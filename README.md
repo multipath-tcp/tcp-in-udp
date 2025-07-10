@@ -111,11 +111,18 @@ sudo apt install clang llvm libelf-dev build-essential libc6-dev-i386 libbpf-dev
 
 Load it with `tc` command:
 
-```
-tc qdisc add dev "${IFACE}" clsact
-tc filter add dev "${IFACE}" egress bpf da obj tcp_in_udp_tc.o sec tc_egress action csum udp index 100
-tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_ingress
-```
+- Client:
+  ```
+  tc qdisc add dev "${IFACE}" clsact
+  tc filter add dev "${IFACE}" egress  bpf da obj tcp_in_udp_tc.o sec tc_client_egress action csum udp index 100
+  tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_client_ingress
+  ```
+- Server:
+  ```
+  tc qdisc add dev "${IFACE}" clsact
+  tc filter add dev "${IFACE}" egress  bpf da obj tcp_in_udp_tc.o sec tc_server_egress action csum udp index 100
+  tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_server_ingress
+  ```
 
 GRO/TSO cannot be used on this interface, because each UDP packet will carry a
 part of the TCP headers, not part of the data that can be merged:
