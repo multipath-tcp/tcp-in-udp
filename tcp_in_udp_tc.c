@@ -161,6 +161,7 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	void *data_end = (void *)(long)skb->data_end;
 	void *data = (void *)(long)skb->data;
 	struct tcp_in_udp_hdr *tuhdr, tuhdr_cpy;
+	struct tcphdr tcphdr;
 	int nh_off = nh->pos - data;
 	__u8 proto = IPPROTO_TCP;
 	__be16 zero = 0;
@@ -194,19 +195,15 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 		goto out;
 	}
 
-	/* tcphdr->seq = tuhdr_cpy.seq; */
-	bpf_skb_store_bytes(skb, nh_off + offsetof(struct tcphdr, seq),
-			    &tuhdr_cpy.seq, sizeof(tuhdr_cpy.seq), 0);
-	/* tcphdr->ack_seq = tuhdr_cpy.ack_seq; */
-	bpf_skb_store_bytes(skb, nh_off + offsetof(struct tcphdr, ack_seq),
-			    &tuhdr_cpy.ack_seq, sizeof(tuhdr_cpy.ack_seq), 0);
-	/* __builtin_memcpy((void *)tcphdr + sizeof(__be32) * 3,
-			 &tuhdr_cpy.doff_flags_window, sizeof(__be32)); */
-	bpf_skb_store_bytes(skb, nh_off + sizeof(__be32) * 3,
-			    &tuhdr_cpy.doff_flags_window, sizeof(tuhdr_cpy.doff_flags_window), 0);
-	/* tcphdr->check = tuhdr_cpy.udphdr.check; */
-	bpf_skb_store_bytes(skb, nh_off + offsetof(struct tcphdr, check),
-			    &tuhdr_cpy.udphdr.check, sizeof(tuhdr_cpy.udphdr.check), 0);
+	tcphdr.source = tuhdr_cpy.udphdr.source;
+	tcphdr.dest = tuhdr_cpy.udphdr.dest;
+	tcphdr.seq = tuhdr_cpy.seq;
+	tcphdr.ack_seq = tuhdr_cpy.ack_seq;
+	__builtin_memcpy((void *)&tcphdr + sizeof(__be32) * 3,
+			 &tuhdr_cpy.doff_flags_window, sizeof(__be32));
+	tcphdr.check = tuhdr_cpy.udphdr.check;
+	bpf_skb_store_bytes(skb, nh_off, &tcphdr, sizeof(tcphdr), 0);
+
 	/* tcphdr->urg_ptr = 0; */
 	bpf_skb_store_bytes(skb, nh_off + offsetof(struct tcphdr, urg_ptr),
 			    &zero, sizeof(__be16), BPF_F_RECOMPUTE_CSUM);
