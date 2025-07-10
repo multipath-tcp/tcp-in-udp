@@ -161,8 +161,8 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	void *data_end = (void *)(long)skb->data_end;
 	void *data = (void *)(long)skb->data;
 	struct tcp_in_udp_hdr *tuhdr, tuhdr_cpy;
-	struct tcphdr *tcphdr = nh->pos;
 	int nh_off = nh->pos - data;
+	__u8 proto = IPPROTO_TCP;
 	__be16 zero = 0;
 
 	if (parse_udphdr(nh, data_end, (struct udphdr**)&tuhdr) < 0)
@@ -179,38 +179,47 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 			break;
 	}
 
-
-	if ((void *)tuhdr + sizeof(struct tcphdr) > data_end) {
-		/* bpf_skb_pull_data needed? */
-		bpf_printk("udp-tcp: WARNING: data_end too small: ulen:%u dlen:%u\n",
-			   bpf_ntohs(tuhdr->udphdr.len), data_end - (void *)tuhdr);
-
-		goto out;
-	}
-
 	if (skb->gso_segs > 1) {
 		bpf_printk("udp-tcp: WARNING, GRO/LRO should be disabled: length:%u, segs:%u, size:%u\n",
 			   skb->len, skb->gso_segs, skb->gso_size);
 		goto out;
 	}
 
-	/* Do the modification before calling bpf_...(skb) helpers which can
-	 * modify the SKB and cause "invalid mem access 'scalar'" errors.
+	/* Load bytes, because we might only get the UDP header size in case the
+	 * skb is non-linear. We could also pull the data, and get nh->pos again
 	 */
-	__builtin_memcpy(&tuhdr_cpy, tuhdr, sizeof(struct tcphdr));
-	tcphdr->seq = tuhdr_cpy.seq;
-	tcphdr->ack_seq = tuhdr_cpy.ack_seq;
-	__builtin_memcpy((void *)tcphdr + sizeof(__be32) * 3,
-			 &tuhdr_cpy.doff_flags_window, sizeof(__be32));
-	tcphdr->check = tuhdr_cpy.udphdr.check;
-	tcphdr->urg_ptr = 0;
+	if (bpf_skb_load_bytes(skb, nh_off, &tuhdr_cpy, sizeof(struct tcphdr))) {
+		bpf_printk("udp-tcp: WARNING: data_end too small: ulen:%u dlen:%u\n",
+			   bpf_ntohs(tuhdr->udphdr.len), data_end - (void *)tuhdr);
+		goto out;
+	}
+
+	/* tcphdr->seq = tuhdr_cpy.seq; */
+	bpf_skb_store_bytes(skb, nh_off + offsetof(struct tcphdr, seq),
+			    &tuhdr_cpy.seq, sizeof(tuhdr_cpy.seq), 0);
+	/* tcphdr->ack_seq = tuhdr_cpy.ack_seq; */
+	bpf_skb_store_bytes(skb, nh_off + offsetof(struct tcphdr, ack_seq),
+			    &tuhdr_cpy.ack_seq, sizeof(tuhdr_cpy.ack_seq), 0);
+	/* __builtin_memcpy((void *)tcphdr + sizeof(__be32) * 3,
+			 &tuhdr_cpy.doff_flags_window, sizeof(__be32)); */
+	bpf_skb_store_bytes(skb, nh_off + sizeof(__be32) * 3,
+			    &tuhdr_cpy.doff_flags_window, sizeof(tuhdr_cpy.doff_flags_window), 0);
+	/* tcphdr->check = tuhdr_cpy.udphdr.check; */
+	bpf_skb_store_bytes(skb, nh_off + offsetof(struct tcphdr, check),
+			    &tuhdr_cpy.udphdr.check, sizeof(tuhdr_cpy.udphdr.check), 0);
+	/* tcphdr->urg_ptr = 0; */
+	bpf_skb_store_bytes(skb, nh_off + offsetof(struct tcphdr, urg_ptr),
+			    &zero, sizeof(__be16), BPF_F_RECOMPUTE_CSUM);
 
 	/* Change protocol: UDP -> TCP */
 	if (iphdr) {
 		__be16 proto_old = bpf_htons(IPPROTO_UDP);
 		__be16 proto_new = bpf_htons(IPPROTO_TCP);
+		int ip_off = (void*)iphdr - data;
 
-		iphdr->protocol = IPPROTO_TCP;
+		/* iphdr->protocol = IPPROTO_TCP; */
+		bpf_skb_store_bytes(skb, ip_off + offsetof(struct iphdr, protocol),
+				    &proto, sizeof(proto), BPF_F_RECOMPUTE_CSUM);
 
 		bpf_l3_csum_replace(skb, ((void*)iphdr - data) +
 					  offsetof(struct iphdr, check),
@@ -221,8 +230,11 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 	} else if (ipv6hdr) {
 		__be32 proto_old = bpf_htonl(IPPROTO_UDP);
 		__be32 proto_new = bpf_htonl(IPPROTO_TCP);
+		int ipv6_off = (void*)ipv6hdr - data;
 
-		ipv6hdr->nexthdr = IPPROTO_TCP;
+		/* ipv6hdr->nexthdr = IPPROTO_TCP; */
+		bpf_skb_store_bytes(skb, ipv6_off + offsetof(struct ipv6hdr, nexthdr),
+				    &proto, sizeof(proto), BPF_F_RECOMPUTE_CSUM);
 
 		bpf_l4_csum_replace(skb, nh_off + offsetof(struct tcphdr, check),
 				    proto_old, proto_new,
