@@ -132,6 +132,12 @@ ethtool -K "${IFACE}" gro off lro off gso off tso off ufo off sg off
 ip link set ${IFACE} gso_max_segs 1
 ```
 
+## MSS
+
+Because the packets will be in UDP and not TCP, any MSS clamping will have no
+effects here. It is important to avoid IP fragmentation. In other words, it
+might be required to adapt the MTU (or the MSS).
+
 ## Identification
 
 ### Client side:
