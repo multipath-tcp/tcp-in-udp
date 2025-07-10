@@ -113,7 +113,7 @@ Load it with `tc` command:
 
 ```
 tc qdisc add dev "${IFACE}" clsact
-tc filter add dev "${IFACE}" egress bpf da obj tcp_in_udp_tc.o sec tc_egress
+tc filter add dev "${IFACE}" egress bpf da obj tcp_in_udp_tc.o sec tc_egress action csum udp index 100
 tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_ingress
 ```
 
