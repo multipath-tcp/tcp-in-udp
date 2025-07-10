@@ -114,13 +114,13 @@ Load it with `tc` command:
 - Client:
   ```
   tc qdisc add dev "${IFACE}" clsact
-  tc filter add dev "${IFACE}" egress  bpf obj tcp_in_udp_tc.o sec tc_client_egress action csum udp index 100
+  tc filter add dev "${IFACE}" egress  bpf obj tcp_in_udp_tc.o sec tc_client_egress action csum udp
   tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_client_ingress
   ```
 - Server:
   ```
   tc qdisc add dev "${IFACE}" clsact
-  tc filter add dev "${IFACE}" egress  bpf obj tcp_in_udp_tc.o sec tc_server_egress action csum udp index 100
+  tc filter add dev "${IFACE}" egress  bpf obj tcp_in_udp_tc.o sec tc_server_egress action csum udp
   tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_server_ingress
   ```
 
@@ -130,6 +130,13 @@ part of the TCP headers, not part of the data that can be merged:
 ```
 ethtool -K "${IFACE}" gro off lro off gso off tso off ufo off sg off
 ip link set ${IFACE} gso_max_segs 1
+```
+
+Note: to get some stats, in egress, it is possible to use:
+
+```
+tc -s action show action csum
+tc -s -j action show action csum | jq
 ```
 
 ## MSS
