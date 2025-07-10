@@ -347,7 +347,7 @@ int tcp_egress_ack(struct __sk_buff *skb)
 	void *data_end = (void *)(long)skb->data_end;
 	void *data = (void *)(long)skb->data;
 	struct hdr_cursor nh = { .pos = data };
-	int eth_type, ip_type, ret = TC_ACT_OK;
+	int eth_type, ip_type, ret = TC_ACT_PIPE;
 	struct ipv6hdr *ipv6hdr = NULL;
 	struct iphdr *iphdr = NULL;
 	struct ethhdr *eth;
