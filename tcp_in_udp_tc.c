@@ -181,8 +181,10 @@ udp_to_tcp(struct __sk_buff *skb, struct hdr_cursor *nh,
 
 
 	if ((void *)tuhdr + sizeof(struct tcphdr) > data_end) {
-		bpf_printk("udp-tcp: TODO: data_end too small: ulen:%u\n",
-			   bpf_ntohs(tuhdr->udphdr.len));
+		/* bpf_skb_pull_data needed? */
+		bpf_printk("udp-tcp: WARNING: data_end too small: ulen:%u dlen:%u\n",
+			   bpf_ntohs(tuhdr->udphdr.len), data_end - (void *)tuhdr);
+
 		goto out;
 	}
 
