@@ -5,7 +5,9 @@ dropping MPTCP options. Using an TCP-in-UDP tunnel will force such middleboxes
 not to modify such TCP connections. The idea here is inspired by an old [IETF
 draft](https://datatracker.ietf.org/doc/html/draft-cheshire-tcp-over-udp-00.html).
 
-This "tunnel" is done in BPF, from the TC hooks.
+This "tunnel" is done in eBPF, from the TC hooks. For more details about why it
+has been created, and its particularities, please check this
+[blog post](https://blog.mptcp.dev/2025/07/14/TCP-in-UDP.html).
 
 ## Headers
 
@@ -109,7 +111,7 @@ sudo apt install clang llvm libelf-dev build-essential libc6-dev-i386 libbpf-dev
 
 ## Setup
 
-Load it with `tc` command:
+Load it with `tc` commands:
 
 - Client:
   ```
