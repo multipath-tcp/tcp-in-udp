@@ -126,16 +126,16 @@ Load it with `tc` commands:
   tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_server_ingress
   ```
 
-GRO/TSO cannot be used on this interface, because each UDP packet will carry a
-part of the TCP headers as part of the data: this is specific to one packet, and
-it cannot be merged with the next data. Please use this:
+Generic Segmentation Offload (GSO) and Generic Receive Offload (GRO) cannot be
+used for this traffic, because each UDP packet will carry a part of the TCP
+headers as part of the data. This part of the data is specific to one packet,
+therefore, it cannot be merged with the next data. UDP GRO is only done on
+demand, e.g. when the userspace asks it (setsockopt(IPPROTO_UDP, UDP_GRO)) or
+for some in-kernel tunnels, so GRO doesn't need to be disabled. To disable GSO:
 
 ```
-ethtool -K "${IFACE}" gro off lro off gso off tso off ufo off sg off
-ip link set ${IFACE} gso_max_segs 1
+ip link set ${IFACE} gso_max_segs 0
 ```
-
-(to be checked: maybe it is enough to disable `gro` and `gso/tso`.)
 
 Note: to get some stats, in egress, it is possible to use:
 

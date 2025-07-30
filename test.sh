@@ -52,9 +52,7 @@ tc_client()
 	tc -n "${ns}" filter show dev "${iface}" egress
 	tc -n "${ns}" filter show dev "${iface}" ingress
 
-	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off ufo off sg off
-	# ip -n "${NS}_cli" link set "cpe" gso_max_segs 1 # but perf impact in this particular setup
-	ip netns exec "${NS}_cli" ethtool -K "cpe" gro off gso off tso off lro off ufo off sg off
+	ip -n "${NS}_cli" link set "cpe" gso_max_segs 0
 }
 
 tc_server()
@@ -71,9 +69,7 @@ tc_server()
 	tc -n "${ns}" filter show dev "${iface}" egress
 	tc -n "${ns}" filter show dev "${iface}" ingress
 
-	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off ufo off sg off
-	# ip -n "${NS}_srv" link set "net" gso_max_segs 1 # but perf impact in this particular setup
-	ip netns exec "${NS}_srv" ethtool -K "net" gro off gso off tso off lro off ufo off sg off
+	ip -n "${NS}_srv" link set "net" gso_max_segs 0
 }
 
 capture()
