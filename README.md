@@ -116,15 +116,40 @@ Load it with `tc` commands:
 - Client:
   ```
   tc qdisc add dev "${IFACE}" clsact
-  tc filter add dev "${IFACE}" egress  bpf obj tcp_in_udp_tc.o sec tc_client_egress action csum udp
-  tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_client_ingress
+  tc filter add dev "${IFACE}" egress  u32 match ip dport "${PORT}" 0xffff action goto chain 1
+  tc filter add dev "${IFACE}" egress  chain 1 bpf object-file tcp_in_udp_tc.o section tc action csum udp
+  tc filter add dev "${IFACE}" ingress u32 match ip sport "${PORT}" 0xffff action goto chain 1
+  tc filter add dev "${IFACE}" ingress chain 1 bpf object-file tcp_in_udp_tc.o section tc direct-action
   ```
 - Server:
   ```
   tc qdisc add dev "${IFACE}" clsact
-  tc filter add dev "${IFACE}" egress  bpf obj tcp_in_udp_tc.o sec tc_server_egress action csum udp
-  tc filter add dev "${IFACE}" ingress bpf da obj tcp_in_udp_tc.o sec tc_server_ingress
+  tc filter add dev "${IFACE}" egress  u32 match ip sport "${PORT}" 0xffff action goto chain 1
+  tc filter add dev "${IFACE}" egress  chain 1 bpf object-file tcp_in_udp_tc.o section tc action csum udp
+  tc filter add dev "${IFACE}" ingress u32 match ip dport "${PORT}" 0xffff action goto chain 1
+  tc filter add dev "${IFACE}" ingress chain 1 bpf object-file tcp_in_udp_tc.o section tc direct-action
   ```
+
+Multiple u32 filters can be used to have more than one port traffic sent to the
+BPF programme.
+
+If the TCP programme supports setting marks (SO_MARK), use it for egress to
+prevent processing traffic that is not from the TCP programme. For client, this
+allows traffic to a different IP address with the same TCP port. For server,
+this prevents sending packet to BPF programme if the interface has multiple IP
+addresses assigned and if the TCP programme doesn't bind to all of them.
+
+- Client & Server:
+  ```
+  tc filter add dev "${IFACE}" egress  handle 2 fw action goto chain 1
+  ```
+
+Be warned that SO_MARK can't be used for ingress as the system doesn't expect
+incoming UDP packets. Therefore, all incoming packets from the interface with
+matching port will be sent to the BPF programme. To decrease the chance of this
+happening, you're recommended to use ports that are outside of the ephemeral
+port range set on net.ipv4.ip_local_port_range (default: 32768-60999). The
+net.ipv4.ip_local_port_range option applies to IPv6 too.
 
 Generic Segmentation Offload (GSO) and Generic Receive Offload (GRO) cannot be
 used for this traffic, because each UDP packet will carry a part of the TCP
@@ -163,15 +188,3 @@ tc filter del dev "${IFACE}" ingress
 Because the packets will be in UDP and not TCP, any MSS clamping will have no
 effects here. It is important to avoid IP fragmentation. In other words, it
 might be required to adapt the MTU (or the MSS).
-
-## Identification
-
-### Client side:
-
-- Ingress: From a specific destination IP and port in UDP
-- Egress: To a specific destination IP and port in TCP
-
-### Server side:
-
-- Ingress: To a specific destination IP and port in UDP
-- Egress: From a previously used `sk`: use ConnMark to set a specific `SO_MARK`
