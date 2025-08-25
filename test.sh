@@ -40,40 +40,40 @@ server()
 
 tc_client()
 {
-	local ns="${NS}_cpe" iface="int"
+	local ns="${NS}_cpe" iface="int" port="5201"
 
 	# ip netns will umount everything on exit
 	ip netns exec "${ns}" sh -c "mount -t debugfs none /sys/kernel/debug && cat /sys/kernel/debug/tracing/trace_pipe" &
 
 	tc -n "${ns}" qdisc add dev "${iface}" clsact
-	tc -n "${ns}" filter add dev "${iface}" egress  bpf obj tcp_in_udp_tc.o sec tc_client_egress action csum udp index 100
-	tc -n "${ns}" filter add dev "${iface}" ingress bpf da obj tcp_in_udp_tc.o sec tc_client_ingress
+	tc -n "${ns}" filter add dev "${iface}" egress  u32 match tcp dst "${port}" 0xffff action goto chain 1
+	tc -n "${ns}" filter add dev "${iface}" egress  chain 1 bpf object-file tcp_in_udp_tc.o section tc action csum udp
+	tc -n "${ns}" filter add dev "${iface}" ingress u32 match udp src "${port}" 0xffff action goto chain 1
+	tc -n "${ns}" filter add dev "${iface}" ingress chain 1 bpf object-file tcp_in_udp_tc.o section tc direct-action
 
 	tc -n "${ns}" filter show dev "${iface}" egress
 	tc -n "${ns}" filter show dev "${iface}" ingress
 
-	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off ufo off sg off
-	# ip -n "${NS}_cli" link set "cpe" gso_max_segs 1 # but perf impact in this particular setup
-	ip netns exec "${NS}_cli" ethtool -K "cpe" gro off gso off tso off lro off ufo off sg off
+	ip -n "${NS}_cli" link set "cpe" gso_max_segs 0
 }
 
 tc_server()
 {
-	local ns="${NS}_net" iface="int"
+	local ns="${NS}_net" iface="int" port="5201"
 
 	# ip netns will umount everything on exit
 	ip netns exec "${ns}" sh -c "mount -t debugfs none /sys/kernel/debug && cat /sys/kernel/debug/tracing/trace_pipe" &
 
 	tc -n "${ns}" qdisc add dev "${iface}" clsact
-	tc -n "${ns}" filter add dev "${iface}" egress  bpf obj tcp_in_udp_tc.o sec tc_server_egress action csum udp index 100
-	tc -n "${ns}" filter add dev "${iface}" ingress bpf da obj tcp_in_udp_tc.o sec tc_server_ingress
+	tc -n "${ns}" filter add dev "${iface}" egress  u32 match tcp src "${port}" 0xffff action goto chain 1
+	tc -n "${ns}" filter add dev "${iface}" egress  chain 1 bpf object-file tcp_in_udp_tc.o section tc action csum udp
+	tc -n "${ns}" filter add dev "${iface}" ingress u32 match udp dst "${port}" 0xffff action goto chain 1
+	tc -n "${ns}" filter add dev "${iface}" ingress chain 1 bpf object-file tcp_in_udp_tc.o section tc direct-action
 
 	tc -n "${ns}" filter show dev "${iface}" egress
 	tc -n "${ns}" filter show dev "${iface}" ingress
 
-	ip netns exec "${ns}" ethtool -K "${iface}" gro off gso off tso off lro off ufo off sg off
-	# ip -n "${NS}_srv" link set "net" gso_max_segs 1 # but perf impact in this particular setup
-	ip netns exec "${NS}_srv" ethtool -K "net" gro off gso off tso off lro off ufo off sg off
+	ip -n "${NS}_srv" link set "net" gso_max_segs 0
 }
 
 capture()
