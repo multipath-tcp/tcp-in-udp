@@ -331,13 +331,24 @@ int tc_tcp_in_udp(struct __sk_buff *skb)
 	} else if (eth_type == bpf_htons(ETH_P_IPV6)) {
 		ip_type = parse_ip6hdr(&nh, data_end, &ipv6hdr);
 	} else {
+		struct ipv6hdr *ipv6hdr_alt = NULL;
+		struct iphdr *iphdr_alt = NULL;
+
 		nh.pos = data;
+
 		if (skb->protocol == bpf_htons(ETH_P_IP))
-			ip_type = parse_iphdr(&nh, data_end, &iphdr);
+			ip_type = parse_iphdr(&nh, data_end, &iphdr_alt);
 		else if (skb->protocol == bpf_htons(ETH_P_IPV6))
-			ip_type = parse_ip6hdr(&nh, data_end, &ipv6hdr);
+			ip_type = parse_ip6hdr(&nh, data_end, &ipv6hdr_alt);
 		else
 			goto out;
+
+		if (ip_type == IPPROTO_TCP)
+			return tcp_to_udp(skb, &nh, iphdr_alt, ipv6hdr_alt);
+		if (ip_type == IPPROTO_UDP)
+			udp_to_tcp(skb, &nh, iphdr_alt, ipv6hdr_alt);
+out:
+		return ret;
 	}
 
 	if (ip_type == IPPROTO_TCP)
@@ -345,7 +356,6 @@ int tc_tcp_in_udp(struct __sk_buff *skb)
 	if (ip_type == IPPROTO_UDP)
 		udp_to_tcp(skb, &nh, iphdr, ipv6hdr);
 
-out:
 	return ret;
 }
 
