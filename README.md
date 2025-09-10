@@ -131,6 +131,8 @@ Load it with `tc` commands:
   tc filter add dev "${IFACE}" ingress chain 1 bpf object-file tcp_in_udp_tc.o section tc direct-action
   ```
 
+On layer 3 interfaces, use the ELF section called `tc_l3`.
+
 Multiple u32 filters can be used to have more than one port traffic sent to the
 BPF program.
 
