@@ -315,7 +315,7 @@ out:
 }
 
 SEC("tc")
-int tc_tcp_in_udp(struct __sk_buff *skb)
+int tc_tcp_in_udp_l2(struct __sk_buff *skb)
 {
 	void *data_end = (void *)(long)skb->data_end;
 	void *data = (void *)(long)skb->data;
@@ -326,19 +326,38 @@ int tc_tcp_in_udp(struct __sk_buff *skb)
 	struct ethhdr *eth;
 
 	eth_type = parse_ethhdr(&nh, data_end, &eth);
-	if (eth_type == bpf_htons(ETH_P_IP)) {
+	if (eth_type == bpf_htons(ETH_P_IP))
 		ip_type = parse_iphdr(&nh, data_end, &iphdr);
-	} else if (eth_type == bpf_htons(ETH_P_IPV6)) {
+	else if (eth_type == bpf_htons(ETH_P_IPV6))
 		ip_type = parse_ip6hdr(&nh, data_end, &ipv6hdr);
-	} else {
-		nh.pos = data;
-		if (skb->protocol == bpf_htons(ETH_P_IP))
-			ip_type = parse_iphdr(&nh, data_end, &iphdr);
-		else if (skb->protocol == bpf_htons(ETH_P_IPV6))
-			ip_type = parse_ip6hdr(&nh, data_end, &ipv6hdr);
-		else
-			goto out;
-	}
+	else
+		goto out;
+
+	if (ip_type == IPPROTO_TCP)
+		return tcp_to_udp(skb, &nh, iphdr, ipv6hdr);
+	if (ip_type == IPPROTO_UDP)
+		udp_to_tcp(skb, &nh, iphdr, ipv6hdr);
+
+out:
+	return ret;
+}
+
+SEC("tc_l3")
+int tc_tcp_in_udp_l3(struct __sk_buff *skb)
+{
+	void *data_end = (void *)(long)skb->data_end;
+	void *data = (void *)(long)skb->data;
+	struct hdr_cursor nh = { .pos = data };
+	int ip_type, ret = TC_ACT_OK;
+	struct ipv6hdr *ipv6hdr = NULL;
+	struct iphdr *iphdr = NULL;
+
+	if (skb->protocol == bpf_htons(ETH_P_IP))
+		ip_type = parse_iphdr(&nh, data_end, &iphdr);
+	else if (skb->protocol == bpf_htons(ETH_P_IPV6))
+		ip_type = parse_ip6hdr(&nh, data_end, &ipv6hdr);
+	else
+		goto out;
 
 	if (ip_type == IPPROTO_TCP)
 		return tcp_to_udp(skb, &nh, iphdr, ipv6hdr);
