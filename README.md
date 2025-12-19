@@ -157,9 +157,16 @@ applies to IPv6 too.
 Generic Segmentation Offload (GSO) and Generic Receive Offload (GRO) cannot be
 used for this traffic, because each UDP packet will carry a part of the TCP
 headers as part of the data. This part of the data is specific to one packet,
-therefore, it cannot be merged with the next data. UDP GRO is only done on
-demand, e.g. when the userspace asks it (`setsockopt(IPPROTO_UDP, UDP_GRO)`) or
-for some in-kernel tunnels, so GRO doesn't need to be disabled. To disable GSO:
+therefore, it cannot be merged with the next data. UDP GRO is usually only done
+on demand, e.g. when the userspace asks it (`setsockopt(IPPROTO_UDP, UDP_GRO)`)
+or for some in-kernel tunnels. In case it's enabled automatically, such as on
+OpenWrt, to disable GRO:
+
+```
+ethtool -K ${IFACE} gro off
+```
+
+To disable GSO:
 
 ```
 ip link set ${IFACE} gso_max_segs 0
