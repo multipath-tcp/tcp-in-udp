@@ -1,5 +1,6 @@
-CFLAGS = -O2 -Wall -target bpf # -Werror
 CC = clang
+TARGET ?= bpfel
+CFLAGS = -O2 -Wall -target $(TARGET) # -Werror
 
 ifeq ($(DEBUG),1)
 	CFLAGS += -g
