@@ -99,16 +99,15 @@ Checksum:
   - L4 header: **changed**: `UDP Length` vs `TCP Urgent Pointer`
   - Data: not changed
 
-
 ## Build
 
-Build the binary using `make`. CLang, `libelf`, `libc6`, and `libbpf` are
-required:
+Make, CLang, `libelf`, `libc6`, and `libbpf` are required:
 
 ```
 sudo apt install make clang libelf-dev libc6-dev-i386 libbpf-dev
 ```
 
+Run `make DEBUG=1` to enable the `-g` compiler flag.
 
 ## Setup
 
