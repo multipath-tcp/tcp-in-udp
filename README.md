@@ -109,6 +109,10 @@ sudo apt install make clang libelf-dev libc6-dev-i386 libbpf-dev
 
 Run `make DEBUG=1` to enable the `-g` compiler flag.
 
+If bpf_printk statements are not supported on the kernel in-use, such as the
+case on OpenWrt's kernel, use `BPF_PRINTK_UNSUPPORTED=1` to compile without the
+bpf_printk statements.
+
 ## Setup
 
 Load it with `tc` commands:

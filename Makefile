@@ -5,6 +5,10 @@ ifeq ($(DEBUG),1)
 	CFLAGS += -g
 endif
 
+ifeq ($(BPF_PRINTK_UNSUPPORTED),1)
+	CFLAGS += -DBPF_PRINTK_UNSUPPORTED
+endif
+
 all: tcp_in_udp_tc.o
 .PHONY: all
 
