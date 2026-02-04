@@ -1,5 +1,14 @@
-CFLAGS = -O2 -g -Wall -target bpf # -Werror
 CC = clang
+TARGET ?= bpfel
+CFLAGS = -O2 -Wall -target $(TARGET) # -Werror
+
+ifeq ($(DEBUG),1)
+	CFLAGS += -g
+endif
+
+ifeq ($(BPF_PRINTK_UNSUPPORTED),1)
+	CFLAGS += -DBPF_PRINTK_UNSUPPORTED
+endif
 
 all: tcp_in_udp_tc.o
 .PHONY: all

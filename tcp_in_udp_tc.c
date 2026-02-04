@@ -10,6 +10,11 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
+#ifdef BPF_PRINTK_UNSUPPORTED
+#undef bpf_printk
+#define bpf_printk(...)
+#endif
+
 struct tcp_in_udp_hdr {
 	struct udphdr udphdr;
 	__be32	doff_flags_window;
