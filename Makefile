@@ -1,6 +1,6 @@
 CC = clang
-TARGET ?= bpfel
-CFLAGS = -O2 -Wall -target $(TARGET) # -Werror
+TARGET ?= bpf
+CFLAGS := $(CFLAGS) -O2 -Wall
 
 ifeq ($(DEBUG),1)
 	CFLAGS += -g
@@ -14,7 +14,7 @@ all: tcp_in_udp_tc.o
 .PHONY: all
 
 %.o: %.c
-	${CC} ${CFLAGS} -c $^ -o $@ -MJ compile_commands.json
+	${CC} ${CFLAGS} -target $(TARGET) -c $^ -o $@ -MJ compile_commands.json
 
 clean:
 	rm -f *.o
