@@ -109,8 +109,28 @@ sudo apt install make clang libelf-dev libc6-dev-i386 libbpf-dev
 
 Run `make DEBUG=1` to enable the `-g` compiler flag.
 
-A little-endian object is compiled by default. Use `TARGET=bpfeb` to compile a
-big-endian object.
+A host-endian object is compiled by default. Use `TARGET=bpfeb` or
+`TARGET=bpfel` with `EXTRA_CFLAGS` to cross-compile. Path to the generated
+kernel UAPI header directory and the architecture macro for the target must be
+provided with `EXTRA_CFLAGS`.
+
+An example command to cross-compile for a big-endian target:
+
+```
+export CFLAGS="-D__MIPSEB__ \
+-I../openwrt/build_dir/target-mips_24kc_musl/linux-ath79_mikrotik/linux-6.12.62/usr/include"
+make TARGET=bpfeb
+```
+
+To use libbpf includes generated for the target, use the `-nostdinc` compiler
+flag which ensures no includes from the host is used:
+
+```
+export CFLAGS="-D__MIPSEB__ -nostdinc \
+-I../openwrt/build_dir/target-mips_24kc_musl/libbpf-1.6.2/ipkg-install/usr/include \
+-I../openwrt/build_dir/target-mips_24kc_musl/linux-ath79_mikrotik/linux-6.12.62/usr/include"
+make TARGET=bpfeb
+```
 
 If bpf_printk statements are not supported on the kernel in-use, such as the
 case on OpenWrt's kernel, use `BPF_PRINTK_UNSUPPORTED=1` to compile without the
