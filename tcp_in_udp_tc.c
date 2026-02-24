@@ -1,4 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+/* SPDX-License-Identifier: AGPL-3.0-or-later
+ * Copyright (C) 2025 Matthieu Baerts <matttbe@kernel.org>
+ * Copyright (C) 2025-2026 Chester A. Unal <chester.a.unal@arinc9.com>
+ */
+
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/in.h>

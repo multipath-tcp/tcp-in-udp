@@ -1,6 +1,6 @@
 #!/bin/bash -e
-# SPDX-License-Identifier: GPL-2.0
-# Copyright (c) 2025, Matthieu Baerts.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2025 Matthieu Baerts <matttbe@kernel.org>
 
 export NS=tcp
 
