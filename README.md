@@ -107,12 +107,24 @@ Make, CLang, `libelf`, `libc6`, and `libbpf` are required:
 sudo apt install make clang libelf-dev libc6-dev-i386 libbpf-dev
 ```
 
+To install:
+
+```
+sudo make install
+```
+
+To uninstall:
+
+```
+sudo make uninstall
+```
+
 Run `make DEBUG=1` to enable the `-g` compiler flag.
 
 A host-endian object is compiled by default. Use `TARGET=bpfeb` or
-`TARGET=bpfel` with `EXTRA_CFLAGS` to cross-compile. Path to the generated
-kernel UAPI header directory and the architecture macro for the target must be
-provided with `EXTRA_CFLAGS`.
+`TARGET=bpfel` with `CFLAGS` to cross-compile. Path to the generated kernel UAPI
+header directory and the architecture macro for the target must be provided with
+`CFLAGS`.
 
 An example command to cross-compile for a big-endian target:
 
