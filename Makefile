@@ -20,5 +20,13 @@ all: tcp_in_udp_tc.o
 %.o: %.c
 	${CC} ${CFLAGS} -target $(TARGET) -c $^ -o $@ -MJ compile_commands.json
 
+install: tcp_in_udp_tc.o
+	install -D tcp_in_udp_tc.o $(DESTDIR)/usr/lib/bpf/tcp_in_udp_tc.o
+.PHONY: install
+
+uninstall:
+	rm -f $(DESTDIR)/usr/lib/bpf/tcp_in_udp_tc.o
+.PHONY: uninstall
+
 clean:
 	rm -f *.o
